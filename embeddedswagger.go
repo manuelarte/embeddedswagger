@@ -12,7 +12,11 @@ import (
 
 const (
 	// SwaggerVersion is the version of Swagger-UI used.
-	SwaggerVersion                       = "5.32.14"
+	SwaggerVersion = "5.32.14"
+	// DefaultSwaggerPattern is the default URL for Swagger-UI.
+	DefaultSwaggerPattern = "/swagger"
+	// DefaultOpenAPIPattern is the default URL for the OpenAPI specification.
+	DefaultOpenAPIPattern                = "/docs"
 	defaultSwaggerInitializerURLTemplate = "https://petstore.swagger.io/v2/swagger.json"
 )
 
@@ -28,9 +32,9 @@ type (
 	Config struct {
 		// OpenApi is the raw OpenAPI specification in bytes.
 		OpenAPI []byte
-		// OpenAPIURL is the URL of the OpenAPI specification. Default to /docs
+		// OpenAPIURL is the URL of the OpenAPI specification. Default to '/docs'.
 		OpenAPIURL string
-		// SwaggerURL is the URL of the OpenAPI specification. Default to /swagger
+		// SwaggerURL is the URL of the OpenAPI specification. Default to '/swagger'.
 		SwaggerURL string
 	}
 
@@ -39,9 +43,7 @@ type (
 		Msg string
 	}
 
-	pattern     string
-	swaggerPath pattern
-	openapiPath pattern
+	pattern string
 )
 
 // Add registers the Swagger endpoints on the provided mux.
@@ -101,31 +103,27 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-func (c *Config) openAPIPath() openapiPath {
+func (c *Config) openAPIPath() pattern {
 	if c.OpenAPIURL == "" {
-		return "/docs"
+		return DefaultOpenAPIPattern
 	}
 
-	return openapiPath(normalizeURLPath(c.OpenAPIURL))
+	return pattern(normalizeURLPath(c.OpenAPIURL))
 }
 
-func (c *Config) swaggerPath() swaggerPath {
+func (c *Config) swaggerPath() pattern {
 	if c.SwaggerURL == "" {
-		return "/swagger"
+		return DefaultSwaggerPattern
 	}
 
-	return swaggerPath(normalizeURLPath(c.SwaggerURL))
+	return pattern(normalizeURLPath(c.SwaggerURL))
 }
 
-func (p swaggerPath) pattern() string {
+func (p pattern) pattern() string {
 	return string(p)
 }
 
-func (p openapiPath) pattern() string {
-	return string(p)
-}
-
-func (p openapiPath) contentType() (string, bool) {
+func (p pattern) contentType() (string, bool) {
 	switch {
 	case strings.HasSuffix(string(p), ".json"):
 		return "application/json", true
