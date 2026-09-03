@@ -21,10 +21,10 @@ const (
 )
 
 var (
+	// ErrServerIsNil error indicating that the server parameter is nil.
+	ErrServerIsNil = errors.New("server is nil")
 	//go:embed static/swagger-ui/*
 	swaggerUI embed.FS
-	// ErrMuxIsNil error indicating that the mux parameter is nil.
-	ErrMuxIsNil = errors.New("mux is nil")
 )
 
 type (
@@ -44,12 +44,20 @@ type (
 	}
 
 	pattern string
+
+	RouteRegistrar interface {
+		Handle(pattern string, handler http.Handler)
+	}
+
+	RouteMethodRegistrar interface {
+		Method(method, pattern string, handler http.Handler)
+	}
 )
 
 // Add registers the Swagger endpoints on the provided mux.
-func Add(cfg Config, mux *http.ServeMux) error {
-	if mux == nil {
-		return ErrMuxIsNil
+func Add(cfg Config, s RouteRegistrar) error {
+	if s == nil {
+		return ErrServerIsNil
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -57,26 +65,25 @@ func Add(cfg Config, mux *http.ServeMux) error {
 	}
 
 	openAPIPath := cfg.openAPIPath()
-	mux.HandleFunc(openAPIPath.pattern(), func(w http.ResponseWriter, r *http.Request) {
+	swaggerURL := cfg.swaggerPath()
+	initialContent, err := swaggerInitializerSource(normalizeURLPath(openAPIPath.pattern()))
+	if err != nil {
+		return err
+	}
+
+	registerGetRoute(s, openAPIPath.pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		contentType, hasContentType := openAPIPath.contentType()
 		if hasContentType {
 			w.Header().Set("Content-Type", contentType)
 		}
 
 		_, _ = w.Write(cfg.OpenAPI)
-	})
+	}))
 
-	swaggerURL := cfg.swaggerPath()
-
-	initialContent, err := swaggerInitializerSource(normalizeURLPath(openAPIPath.pattern()))
-	if err != nil {
-		return err
-	}
-
-	mux.HandleFunc(fmt.Sprintf("%s/swagger-initializer.js", swaggerURL), func(w http.ResponseWriter, r *http.Request) {
+	registerGetRoute(s, fmt.Sprintf("%s/swagger-initializer.js", swaggerURL), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = w.Write(initialContent)
-	})
+	}))
 
 	sfs, err := fs.Sub(swaggerUI, "static/swagger-ui")
 	if err != nil {
@@ -84,9 +91,27 @@ func Add(cfg Config, mux *http.ServeMux) error {
 	}
 
 	fsHandler := http.StripPrefix(swaggerURL.pattern(), http.FileServer(http.FS(sfs)))
-	mux.Handle(fmt.Sprintf("%s/", swaggerURL.pattern()), fsHandler)
+	registerGetRoute(s, staticSwaggerPattern(s, swaggerURL.pattern()), fsHandler)
 
 	return nil
+}
+
+func registerGetRoute(s RouteRegistrar, routePattern string, handler http.Handler) {
+	if methodRegistrar, ok := s.(RouteMethodRegistrar); ok {
+		methodRegistrar.Method(http.MethodGet, routePattern, handler)
+
+		return
+	}
+
+	s.Handle(routePattern, handler)
+}
+
+func staticSwaggerPattern(s RouteRegistrar, swaggerPath string) string {
+	if _, ok := s.(RouteMethodRegistrar); ok {
+		return fmt.Sprintf("%s/*", swaggerPath)
+	}
+
+	return fmt.Sprintf("%s/", swaggerPath)
 }
 
 // Error implements the error interface.
