@@ -10,23 +10,24 @@ import (
 	"github.com/manuelarte/embeddedswagger"
 )
 
+type httpServerFramework interface {
+	embeddedswagger.RouteRegistrar
+	http.Handler
+}
+
 func TestOpenAPIPath(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		createServerFn func() http.Handler
-		openapipath    string
+		httpServer  httpServerFramework
+		openapipath string
 	}{
 		"mux server": {
-			createServerFn: func() http.Handler {
-				return http.NewServeMux()
-			},
+			httpServer:  http.NewServeMux(),
 			openapipath: "/docs",
 		},
 		"chi server": {
-			createServerFn: func() http.Handler {
-				return chi.NewRouter()
-			},
+			httpServer:  chi.NewRouter(),
 			openapipath: "/docs",
 		},
 	}
@@ -35,16 +36,15 @@ func TestOpenAPIPath(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			s := tc.createServerFn()
 			if err := embeddedswagger.Add(embeddedswagger.Config{
 				OpenAPI: OpenAPI,
-			}, s); err != nil {
+			}, tc.httpServer); err != nil {
 				t.Fatalf("Add returned error: %v", err)
 			}
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.openapipath, nil)
 			rr := httptest.NewRecorder()
-			s.ServeHTTP(rr, req)
+			tc.httpServer.ServeHTTP(rr, req)
 
 			if rr.Code != http.StatusOK {
 				t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
