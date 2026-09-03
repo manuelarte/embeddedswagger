@@ -45,10 +45,12 @@ type (
 
 	pattern string
 
+	// RouteRegistrar is the interface that wraps the Handle method.
 	RouteRegistrar interface {
 		Handle(pattern string, handler http.Handler)
 	}
 
+	// RouteMethodRegistrar is the interface that wraps the Method method.
 	RouteMethodRegistrar interface {
 		Method(method, pattern string, handler http.Handler)
 	}
@@ -66,6 +68,7 @@ func Add(cfg Config, s RouteRegistrar) error {
 
 	openAPIPath := cfg.openAPIPath()
 	swaggerURL := cfg.swaggerPath()
+
 	initialContent, err := swaggerInitializerSource(normalizeURLPath(openAPIPath.pattern()))
 	if err != nil {
 		return err
@@ -80,10 +83,14 @@ func Add(cfg Config, s RouteRegistrar) error {
 		_, _ = w.Write(cfg.OpenAPI)
 	}))
 
-	registerGetRoute(s, fmt.Sprintf("%s/swagger-initializer.js", swaggerURL), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		_, _ = w.Write(initialContent)
-	}))
+	registerGetRoute(
+		s,
+		fmt.Sprintf("%s/swagger-initializer.js", swaggerURL),
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request,
+		) {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			_, _ = w.Write(initialContent)
+		}))
 
 	sfs, err := fs.Sub(swaggerUI, "static/swagger-ui")
 	if err != nil {
@@ -92,6 +99,13 @@ func Add(cfg Config, s RouteRegistrar) error {
 
 	fsHandler := http.StripPrefix(swaggerURL.pattern(), http.FileServer(http.FS(sfs)))
 	registerGetRoute(s, staticSwaggerPattern(s, swaggerURL.pattern()), fsHandler)
+
+	if !strings.HasSuffix(swaggerURL.pattern(), "/") {
+		redirectTarget := swaggerURL.pattern() + "/"
+		registerGetRoute(s, swaggerURL.pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, redirectTarget, http.StatusMovedPermanently)
+		}))
+	}
 
 	return nil
 }
@@ -119,6 +133,7 @@ func (e *ConfigError) Error() string {
 	return e.Msg
 }
 
+// DefaultConfig returns a Config with the default values.
 func DefaultConfig(openapi []byte) Config {
 	return Config{
 		OpenAPI:    openapi,
@@ -132,12 +147,15 @@ func (c *Config) Validate() error {
 	if len(c.OpenAPI) == 0 {
 		return &ConfigError{Msg: "OpenAPI specification is empty"}
 	}
+
 	if c.OpenAPIURL == "" {
 		return &ConfigError{Msg: "OpenAPI URL is empty"}
 	}
+
 	if c.SwaggerURL == "" {
 		return &ConfigError{Msg: "Swagger URL is empty"}
 	}
+
 	return nil
 }
 
