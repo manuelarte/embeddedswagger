@@ -24,14 +24,17 @@ func run(logger *slog.Logger) error {
 	ctx := context.Background()
 
 	r := chi.NewRouter()
-	if err := embeddedswagger.Add(embeddedswagger.Config{
-		OpenAPI: examples.OpenAPI,
-	}, r); err != nil {
+	cfg := embeddedswagger.DefaultConfig(examples.OpenAPI)
+	if err := embeddedswagger.Add(cfg, r); err != nil {
 		return fmt.Errorf("failed to add embeddedswagger: %w", err)
 	}
 
-	addr := ":3000"
-	logger.InfoContext(ctx, "server listening", slog.String("addr", addr))
+	addr := "localhost:3000"
+	logger.InfoContext(
+		ctx,
+		"server listening",
+		slog.String("swagger", fmt.Sprintf("http://%s/swagger/", addr)),
+	)
 	err := http.ListenAndServe(addr, r)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server error: %w", err)
