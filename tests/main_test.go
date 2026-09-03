@@ -67,3 +67,5 @@ func TestOpenAPIPath(t *testing.T) {
 		})
 	}
 }
+
+// TODO: add tests for swagger, check /swagger, /swagger/, /swagger/index.html
