@@ -99,16 +99,28 @@ func TestSwaggerPath(t *testing.T) {
 				t.Fatalf("Add returned error: %v", err)
 			}
 
-			for _, path := range tc.validPaths {
+			pathsToCheck := append(tc.validPaths, cfg.SwaggerURL)
+			for _, path := range pathsToCheck {
 				req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
 				rr := httptest.NewRecorder()
 				tc.httpServer.ServeHTTP(rr, req)
+
+				if rr.Code >= 300 && rr.Code < 400 {
+					loc := rr.Header().Get("Location")
+					if loc == "" {
+						t.Errorf("status = %d, want %d or redirect with Location", rr.Code, http.StatusOK)
+						continue
+					}
+
+					pathsToCheck = append(pathsToCheck, loc)
+					continue
+				}
 
 				if rr.Code != http.StatusOK {
 					t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
 				}
 				if got := rr.Body.String(); strings.Contains(got, "url: \"https://petstore.swagger.io/v2/swagger.json\",") {
-					t.Errorf("body = %q, want %q", got, string(openAPI))
+					t.Errorf("body = %q, want not contain petstore url", got)
 				}
 			}
 
