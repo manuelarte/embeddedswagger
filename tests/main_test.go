@@ -1,6 +1,7 @@
 package tests
 
 import (
+	_ "embed"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/manuelarte/embeddedswagger"
 )
+
+//go:embed openapi.json
+var openAPI []byte
 
 type httpServerFramework interface {
 	embeddedswagger.RouteRegistrar
@@ -22,11 +26,17 @@ func TestOpenAPIPath(t *testing.T) {
 		httpServer  httpServerFramework
 		openapipath string
 	}{
-		"mux server": {
+		"mux server, empty (default) path": {
+			httpServer: http.NewServeMux(),
+		},
+		"mux server, default path": {
 			httpServer:  http.NewServeMux(),
 			openapipath: "/docs",
 		},
-		"chi server": {
+		"chi server, empty (default) path": {
+			httpServer: chi.NewRouter(),
+		},
+		"chi server, default path": {
 			httpServer:  chi.NewRouter(),
 			openapipath: "/docs",
 		},
@@ -36,21 +46,23 @@ func TestOpenAPIPath(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if err := embeddedswagger.Add(embeddedswagger.Config{
-				OpenAPI: OpenAPI,
-			}, tc.httpServer); err != nil {
+			cfg := embeddedswagger.DefaultConfig(openAPI)
+			if tc.openapipath != "" {
+				cfg.OpenAPIURL = tc.openapipath
+			}
+			if err := embeddedswagger.Add(cfg, tc.httpServer); err != nil {
 				t.Fatalf("Add returned error: %v", err)
 			}
 
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.openapipath, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, cfg.OpenAPIURL, nil)
 			rr := httptest.NewRecorder()
 			tc.httpServer.ServeHTTP(rr, req)
 
 			if rr.Code != http.StatusOK {
 				t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 			}
-			if got := rr.Body.String(); got != string(OpenAPI) {
-				t.Fatalf("body = %q, want %q", got, string(OpenAPI))
+			if got := rr.Body.String(); got != string(openAPI) {
+				t.Fatalf("body = %q, want %q", got, string(openAPI))
 			}
 		})
 	}

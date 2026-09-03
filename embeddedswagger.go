@@ -38,8 +38,8 @@ type (
 		SwaggerURL string
 	}
 
-	// InvalidOpenAPIError is an error that is thrown when the OpenAPI specification is not valid.
-	InvalidOpenAPIError struct {
+	// ConfigError is an error that is thrown when the Config is not valid.
+	ConfigError struct {
 		Msg string
 	}
 
@@ -115,16 +115,29 @@ func staticSwaggerPattern(s RouteRegistrar, swaggerPath string) string {
 }
 
 // Error implements the error interface.
-func (e *InvalidOpenAPIError) Error() string {
+func (e *ConfigError) Error() string {
 	return e.Msg
+}
+
+func DefaultConfig(openapi []byte) Config {
+	return Config{
+		OpenAPI:    openapi,
+		OpenAPIURL: DefaultOpenAPIPattern,
+		SwaggerURL: DefaultSwaggerPattern,
+	}
 }
 
 // Validate checks that the Config has correct values.
 func (c *Config) Validate() error {
 	if len(c.OpenAPI) == 0 {
-		return &InvalidOpenAPIError{Msg: "OpenAPI specification is empty"}
+		return &ConfigError{Msg: "OpenAPI specification is empty"}
 	}
-	// validate everything
+	if c.OpenAPIURL == "" {
+		return &ConfigError{Msg: "OpenAPI URL is empty"}
+	}
+	if c.SwaggerURL == "" {
+		return &ConfigError{Msg: "Swagger URL is empty"}
+	}
 	return nil
 }
 
