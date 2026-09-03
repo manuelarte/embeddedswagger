@@ -36,6 +36,10 @@ func main() {
 }
 ```
 
+Then swagger will be available at `http://localhost:8080/swagger/`.
+
+## Examples
+
 Check the [examples](examples) folder for a complete example on:
 
 - Standard library `http.DefaultServeMux`.
