@@ -12,15 +12,19 @@ import (
 
 const (
 	// SwaggerVersion is the version of Swagger-UI used.
-	SwaggerVersion                       = "5.32.14"
+	SwaggerVersion = "5.32.14"
+	// DefaultSwaggerPattern is the default URL for Swagger-UI.
+	DefaultSwaggerPattern = "/swagger"
+	// DefaultOpenAPIPattern is the default URL for the OpenAPI specification.
+	DefaultOpenAPIPattern                = "/docs"
 	defaultSwaggerInitializerURLTemplate = "https://petstore.swagger.io/v2/swagger.json"
 )
 
 var (
+	// ErrServerIsNil error indicating that the server parameter is nil.
+	ErrServerIsNil = errors.New("server is nil")
 	//go:embed static/swagger-ui/*
 	swaggerUI embed.FS
-	// ErrMuxIsNil error indicating that the mux parameter is nil.
-	ErrMuxIsNil = errors.New("mux is nil")
 )
 
 type (
@@ -28,26 +32,34 @@ type (
 	Config struct {
 		// OpenApi is the raw OpenAPI specification in bytes.
 		OpenAPI []byte
-		// OpenAPIURL is the URL of the OpenAPI specification. Default to /docs
+		// OpenAPIURL is the URL of the OpenAPI specification. Default to '/docs'.
 		OpenAPIURL string
-		// SwaggerURL is the URL of the OpenAPI specification. Default to /swagger
+		// SwaggerURL is the URL of the OpenAPI specification. Default to '/swagger'.
 		SwaggerURL string
 	}
 
-	// InvalidOpenAPIError is an error that is thrown when the OpenAPI specification is not valid.
-	InvalidOpenAPIError struct {
+	// ConfigError is an error that is thrown when the Config is not valid.
+	ConfigError struct {
 		Msg string
 	}
 
-	pattern     string
-	swaggerPath pattern
-	openapiPath pattern
+	pattern string
+
+	// RouteRegistrar is the interface that wraps the Handle method.
+	RouteRegistrar interface {
+		Handle(pattern string, handler http.Handler)
+	}
+
+	// RouteMethodRegistrar is the interface that wraps the Method method.
+	RouteMethodRegistrar interface {
+		Method(method, pattern string, handler http.Handler)
+	}
 )
 
 // Add registers the Swagger endpoints on the provided mux.
-func Add(cfg Config, mux *http.ServeMux) error {
-	if mux == nil {
-		return ErrMuxIsNil
+func Add(cfg Config, s RouteRegistrar) error {
+	if s == nil {
+		return ErrServerIsNil
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -55,15 +67,6 @@ func Add(cfg Config, mux *http.ServeMux) error {
 	}
 
 	openAPIPath := cfg.openAPIPath()
-	mux.HandleFunc(openAPIPath.pattern(), func(w http.ResponseWriter, r *http.Request) {
-		contentType, hasContentType := openAPIPath.contentType()
-		if hasContentType {
-			w.Header().Set("Content-Type", contentType)
-		}
-
-		_, _ = w.Write(cfg.OpenAPI)
-	})
-
 	swaggerURL := cfg.swaggerPath()
 
 	initialContent, err := swaggerInitializerSource(normalizeURLPath(openAPIPath.pattern()))
@@ -71,10 +74,23 @@ func Add(cfg Config, mux *http.ServeMux) error {
 		return err
 	}
 
-	mux.HandleFunc(fmt.Sprintf("%s/swagger-initializer.js", swaggerURL), func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		_, _ = w.Write(initialContent)
-	})
+	registerGetRoute(s, openAPIPath.pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType, hasContentType := openAPIPath.contentType()
+		if hasContentType {
+			w.Header().Set("Content-Type", contentType)
+		}
+
+		_, _ = w.Write(cfg.OpenAPI)
+	}))
+
+	registerGetRoute(
+		s,
+		fmt.Sprintf("%s/swagger-initializer.js", swaggerURL),
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request,
+		) {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			_, _ = w.Write(initialContent)
+		}))
 
 	sfs, err := fs.Sub(swaggerUI, "static/swagger-ui")
 	if err != nil {
@@ -82,50 +98,88 @@ func Add(cfg Config, mux *http.ServeMux) error {
 	}
 
 	fsHandler := http.StripPrefix(swaggerURL.pattern(), http.FileServer(http.FS(sfs)))
-	mux.Handle(fmt.Sprintf("%s/", swaggerURL.pattern()), fsHandler)
+	registerGetRoute(s, staticSwaggerPattern(s, swaggerURL.pattern()), fsHandler)
+
+	if !strings.HasSuffix(swaggerURL.pattern(), "/") {
+		redirectTarget := swaggerURL.pattern() + "/"
+		registerGetRoute(s, swaggerURL.pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, redirectTarget, http.StatusMovedPermanently)
+		}))
+	}
 
 	return nil
 }
 
+func registerGetRoute(s RouteRegistrar, routePattern string, handler http.Handler) {
+	if methodRegistrar, ok := s.(RouteMethodRegistrar); ok {
+		methodRegistrar.Method(http.MethodGet, routePattern, handler)
+
+		return
+	}
+
+	s.Handle(routePattern, handler)
+}
+
+func staticSwaggerPattern(s RouteRegistrar, swaggerPath string) string {
+	if _, ok := s.(RouteMethodRegistrar); ok {
+		return fmt.Sprintf("%s/*", swaggerPath)
+	}
+
+	return fmt.Sprintf("%s/", swaggerPath)
+}
+
 // Error implements the error interface.
-func (e *InvalidOpenAPIError) Error() string {
+func (e *ConfigError) Error() string {
 	return e.Msg
+}
+
+// DefaultConfig returns a Config with the default values.
+func DefaultConfig(openapi []byte) Config {
+	return Config{
+		OpenAPI:    openapi,
+		OpenAPIURL: DefaultOpenAPIPattern,
+		SwaggerURL: DefaultSwaggerPattern,
+	}
 }
 
 // Validate checks that the Config has correct values.
 func (c *Config) Validate() error {
 	if len(c.OpenAPI) == 0 {
-		return &InvalidOpenAPIError{Msg: "OpenAPI specification is empty"}
+		return &ConfigError{Msg: "OpenAPI specification is empty"}
 	}
-	// validate everything
+
+	if c.OpenAPIURL == "" {
+		return &ConfigError{Msg: "OpenAPI URL is empty"}
+	}
+
+	if c.SwaggerURL == "" {
+		return &ConfigError{Msg: "Swagger URL is empty"}
+	}
+
 	return nil
 }
 
-func (c *Config) openAPIPath() openapiPath {
+func (c *Config) openAPIPath() pattern {
 	if c.OpenAPIURL == "" {
-		return "/docs"
+		return DefaultOpenAPIPattern
 	}
 
-	return openapiPath(normalizeURLPath(c.OpenAPIURL))
+	return pattern(normalizeURLPath(c.OpenAPIURL))
 }
 
-func (c *Config) swaggerPath() swaggerPath {
+func (c *Config) swaggerPath() pattern {
 	if c.SwaggerURL == "" {
-		return "/swagger"
+		return DefaultSwaggerPattern
 	}
 
-	return swaggerPath(normalizeURLPath(c.SwaggerURL))
+	return pattern(normalizeURLPath(c.SwaggerURL))
 }
 
-func (p swaggerPath) pattern() string {
+func (p pattern) pattern() string {
 	return string(p)
 }
 
-func (p openapiPath) pattern() string {
-	return string(p)
-}
-
-func (p openapiPath) contentType() (string, bool) {
+func (p pattern) contentType() (string, bool) {
 	switch {
 	case strings.HasSuffix(string(p), ".json"):
 		return "application/json", true

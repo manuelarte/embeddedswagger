@@ -1,0 +1,71 @@
+---
+name: Swagger UI version check
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-swagger-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ISSUE_ASSIGNEE: ${{ vars.SWAGGER_UI_ISSUE_ASSIGNEE || github.repository_owner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check Swagger UI release
+        id: swagger-check
+        shell: bash
+        run: |
+          set +e
+          output=$(make check-swagger-ui 2>&1)
+          status=$?
+          echo "$output"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "output<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$output" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Open issue if upstream is newer
+        if: steps.swagger-check.outputs.status == '1'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STEPS_SWAGGER_CHECK_OUTPUTS_OUTPUT: ${{ steps.swagger-check.outputs.output }}
+        run: |
+          set -euo pipefail
+
+          issue_title="fix: swagger UI is behind the latest upstream release"
+          existing_issue=$(gh issue list \
+            --search "repo:${{ github.repository }} \"${issue_title}\" in:title is:open" \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$existing_issue" ]; then
+            echo "Issue #${existing_issue} already exists; skipping creation."
+            exit 0
+          fi
+
+          body=$(cat <<EOF
+          The weekly Swagger UI version check detected that the embedded Swagger UI is older than the latest upstream release.
+
+          Details:
+          ${STEPS_SWAGGER_CHECK_OUTPUTS_OUTPUT}
+          EOF
+          )
+
+          gh issue create \
+            --title "$issue_title" \
+            --body "$body" \
+            --assignee "$ISSUE_ASSIGNEE"

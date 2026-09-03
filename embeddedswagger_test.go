@@ -33,7 +33,7 @@ func TestAddRegistersOpenAPIAndInitializerURL(t *testing.T) {
 		}
 
 		if got := rr.Body.String(); got != "openapi-document" {
-			t.Fatalf("body = %q, want %q", got, "openapi-document")
+			t.Errorf("body = %q, want %q", got, "openapi-document")
 		}
 	})
 
@@ -50,11 +50,11 @@ func TestAddRegistersOpenAPIAndInitializerURL(t *testing.T) {
 
 		body := rr.Body.String()
 		if !strings.Contains(body, "url: \"/custom/openapi.json\"") {
-			t.Fatalf("initializer body = %q, want custom openapi url", body)
+			t.Errorf("initializer body = %q, want custom openapi url", body)
 		}
 
 		if strings.Contains(body, defaultSwaggerInitializerURLTemplate) {
-			t.Fatalf("initializer body still references default petstore URL: %q", body)
+			t.Errorf("initializer body still references default petstore URL: %q", body)
 		}
 	})
 }
@@ -64,7 +64,7 @@ func TestAddUsesDefaultPaths(t *testing.T) {
 
 	mux := http.NewServeMux()
 
-	cfg := Config{OpenAPI: []byte("default-doc")}
+	cfg := DefaultConfig([]byte("default-doc"))
 	if err := Add(cfg, mux); err != nil {
 		t.Fatalf("Add returned error: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestAddUsesDefaultPaths(t *testing.T) {
 			}
 
 			if tc.want != "" && !strings.Contains(rr.Body.String(), tc.want) {
-				t.Fatalf("body = %q, want substring %q", rr.Body.String(), tc.want)
+				t.Errorf("body = %q, want substring %q", rr.Body.String(), tc.want)
 			}
 		})
 	}

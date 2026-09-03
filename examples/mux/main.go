@@ -11,10 +11,8 @@ import (
 	"time"
 
 	"github.com/manuelarte/embeddedswagger"
+	"github.com/manuelarte/embeddedswagger/examples"
 )
-
-//go:embed openapi.json
-var openapi []byte
 
 func main() {
 	logger := slog.Default()
@@ -36,7 +34,7 @@ func run(logger *slog.Logger) error {
 	}
 
 	if err := embeddedswagger.Add(embeddedswagger.Config{
-		OpenAPI: openapi,
+		OpenAPI: examples.OpenAPI,
 	}, handler); err != nil {
 		return fmt.Errorf("failed to add embeddedswagger: %w", err)
 	}
