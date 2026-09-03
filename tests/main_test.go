@@ -1,33 +1,57 @@
 package tests
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/manuelarte/embeddedswagger"
-	root "github.com/manuelarte/embeddedswagger/tests"
 )
 
 func TestOpenAPIPath(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		createServerFn func()
+		createServerFn func() http.Handler
 		openapipath    string
 	}{
-		"mux server": {},
-		"chi server": {},
+		"mux server": {
+			createServerFn: func() http.Handler {
+				return http.NewServeMux()
+			},
+			openapipath: "/docs",
+		},
+		"chi server": {
+			createServerFn: func() http.Handler {
+				return chi.NewRouter()
+			},
+			openapipath: "/docs",
+		},
 	}
+
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			s := tc.createServerFn()
-			embeddedswagger.Add(embeddedswagger.Config{
-				OpenAPI: root.OpenAPI,
-			}, s)
+			if err := embeddedswagger.Add(embeddedswagger.Config{
+				OpenAPI: OpenAPI,
+			}, s); err != nil {
+				t.Fatalf("Add returned error: %v", err)
+			}
 
-			// Check /docs endpoint that it's 200.
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.openapipath, nil)
+			rr := httptest.NewRecorder()
+			s.ServeHTTP(rr, req)
 
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+			}
+			if got := rr.Body.String(); got != string(OpenAPI) {
+				t.Fatalf("body = %q, want %q", got, string(OpenAPI))
+			}
 		})
 	}
 }
