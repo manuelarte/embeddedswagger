@@ -11,4 +11,4 @@ lint:
 	@./custom-gcl run --fix ./...
 
 check-swagger-ui:
-	@./scripts/check-swagger-ui.sh
+	@python3 ./scripts/main.py "$(CURDIR)"
