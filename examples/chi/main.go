@@ -8,6 +8,9 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/manuelarte/embeddedswagger"
+	"github.com/manuelarte/embeddedswagger/examples"
 )
 
 func main() {
@@ -21,7 +24,11 @@ func run(logger *slog.Logger) error {
 	ctx := context.Background()
 
 	r := chi.NewRouter()
-	// todo
+	if err := embeddedswagger.Add(embeddedswagger.Config{
+		OpenAPI: examples.OpenAPI,
+	}, r); err != nil {
+		return fmt.Errorf("failed to add embeddedswagger: %w", err)
+	}
 
 	addr := ":3000"
 	logger.InfoContext(ctx, "server listening", slog.String("addr", addr))
