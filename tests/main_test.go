@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -62,10 +63,55 @@ func TestOpenAPIPath(t *testing.T) {
 				t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 			}
 			if got := rr.Body.String(); got != string(openAPI) {
-				t.Fatalf("body = %q, want %q", got, string(openAPI))
+				t.Errorf("body = %q, want %q", got, string(openAPI))
 			}
 		})
 	}
 }
 
-// TODO: add tests for swagger, check /swagger, /swagger/, /swagger/index.html
+func TestSwaggerPath(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		httpServer  httpServerFramework
+		swaggerPath string
+		validPaths  []string
+	}{
+		"mux server, empty (default) path": {
+			httpServer: http.NewServeMux(),
+			validPaths: []string{"/swagger", "/swagger/", "/swagger/index.html"},
+		},
+		"chi server, empty (default) path": {
+			httpServer: chi.NewRouter(),
+			validPaths: []string{"/swagger", "/swagger/", "/swagger/index.html"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := embeddedswagger.DefaultConfig(openAPI)
+			if tc.swaggerPath != "" {
+				cfg.SwaggerURL = tc.swaggerPath
+			}
+			if err := embeddedswagger.Add(cfg, tc.httpServer); err != nil {
+				t.Fatalf("Add returned error: %v", err)
+			}
+
+			for _, path := range tc.validPaths {
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
+				rr := httptest.NewRecorder()
+				tc.httpServer.ServeHTTP(rr, req)
+
+				if rr.Code != http.StatusOK {
+					t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+				}
+				if got := rr.Body.String(); strings.Contains(got, "url: \"https://petstore.swagger.io/v2/swagger.json\",") {
+					t.Errorf("body = %q, want %q", got, string(openAPI))
+				}
+			}
+
+		})
+	}
+}
