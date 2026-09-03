@@ -64,11 +64,7 @@ func TestAddUsesDefaultPaths(t *testing.T) {
 
 	mux := http.NewServeMux()
 
-	cfg := Config{
-		OpenAPI:    []byte("default-doc"),
-		OpenAPIURL: DefaultOpenAPIPattern,
-		SwaggerURL: DefaultSwaggerPattern,
-	}
+	cfg := DefaultConfig([]byte("default-doc"))
 	if err := Add(cfg, mux); err != nil {
 		t.Fatalf("Add returned error: %v", err)
 	}
