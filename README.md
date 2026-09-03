@@ -1,6 +1,6 @@
 # Embedded Swagger
 
-Simple Swagger UI setup for Go's standard library HTTP server.
+Simple Swagger UI setup (no dependencies) for Go HTTP server.
 
 ## Install
 
@@ -9,6 +9,8 @@ go get github.com/manuelarte/embeddedswagger
 ```
 
 ## Use
+
+Example use for the standard library `http.DefaultServeMux`:
 
 ```go
 package main
@@ -32,9 +34,14 @@ func main() {
 }
 ```
 
-Check the [example](example) for a complete example.
+Check the [example](example) for a complete example on:
+
+- Standard library `http.DefaultServeMux`.
+- Chi router.
 
 ## Defaults
+
+Default paths:
 
 - OpenAPI: `/docs`
 - Swagger UI: `/swagger`
