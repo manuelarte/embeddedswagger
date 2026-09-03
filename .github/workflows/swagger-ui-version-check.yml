@@ -41,6 +41,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STEPS_SWAGGER_CHECK_OUTPUTS_OUTPUT: ${{ steps.swagger-check.outputs.output }}
         run: |
           set -euo pipefail
 
@@ -60,7 +61,7 @@ jobs:
           The weekly Swagger UI version check detected that the embedded Swagger UI is older than the latest upstream release.
 
           Details:
-          ${{ steps.swagger-check.outputs.output }}
+          ${STEPS_SWAGGER_CHECK_OUTPUTS_OUTPUT}
           EOF
           )
 
