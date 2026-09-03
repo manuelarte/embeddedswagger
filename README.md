@@ -26,6 +26,8 @@ func main() {
 
 	if err := embeddedswagger.Add(embeddedswagger.Config{
 		OpenAPI: openAPI,
+		OpenAPIURL: "/docs",
+		SwaggerURL: "/swagger",
 	}, http.DefaultServeMux); err != nil {
 		panic(err)
 	}
@@ -34,14 +36,7 @@ func main() {
 }
 ```
 
-Check the [example](example) for a complete example on:
+Check the [examples](examples) folder for a complete example on:
 
 - Standard library `http.DefaultServeMux`.
 - Chi router.
-
-## Defaults
-
-Default paths:
-
-- OpenAPI: `/docs`
-- Swagger UI: `/swagger`
