@@ -37,7 +37,7 @@ jobs:
           exit 0
 
       - name: Open issue if upstream is newer
-        if: steps.swagger-check.outputs.status == '1'
+        if: steps.swagger-check.outputs.status != '0'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
