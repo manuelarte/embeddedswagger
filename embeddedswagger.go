@@ -12,7 +12,7 @@ import (
 
 const (
 	// SwaggerVersion is the version of Swagger-UI used.
-	SwaggerVersion = "5.33.0"
+	SwaggerVersion = "5.33.1"
 	// DefaultSwaggerPattern is the default URL for Swagger-UI.
 	DefaultSwaggerPattern = "/swagger"
 	// DefaultOpenAPIPattern is the default URL for the OpenAPI specification.
