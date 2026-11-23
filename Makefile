@@ -1,4 +1,4 @@
-.PHONY: test fmt lint check-swagger-ui
+.PHONY: test fmt lint check-swagger-ui update-swagger-ui
 
 test:
 	@go test -v ./...
@@ -12,3 +12,6 @@ lint:
 
 check-swagger-ui:
 	@python3 ./scripts/main.py "$(CURDIR)"
+
+update-swagger-ui:
+	@python3 ./scripts/update_swagger_ui.py "$(CURDIR)"

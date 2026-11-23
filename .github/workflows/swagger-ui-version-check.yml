@@ -1,5 +1,5 @@
 ---
-name: Swagger UI version check
+name: Update Swagger UI
 
 on:
   schedule:
@@ -8,64 +8,64 @@ on:
 
 permissions:
   contents: read
-  issues: write
+
+concurrency:
+  group: swagger-ui-update
+  cancel-in-progress: false
 
 jobs:
-  check-swagger-ui:
+  update-swagger-ui:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      ISSUE_ASSIGNEE: ${{ vars.SWAGGER_UI_ISSUE_ASSIGNEE || github.repository_owner }}
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Check Swagger UI release
-        id: swagger-check
-        shell: bash
-        run: |
-          set +e
-          output=$(make check-swagger-ui 2>&1)
-          status=$?
-          echo "$output"
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          echo "output<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$output" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          exit 0
+      - name: Test updater
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
-      - name: Open issue if upstream is newer
-        if: steps.swagger-check.outputs.status != '0'
-        shell: bash
+      - name: Update Swagger UI
+        id: update
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          STEPS_SWAGGER_CHECK_OUTPUTS_OUTPUT: ${{ steps.swagger-check.outputs.output }}
         run: |
           set -euo pipefail
-
-          issue_title="fix: swagger UI is behind the latest upstream release"
-          existing_issue=$(gh issue list \
-            --search "repo:${{ github.repository }} \"${issue_title}\" in:title is:open" \
-            --limit 1 \
-            --json number \
-            --jq '.[0].number // empty')
-
-          if [ -n "$existing_issue" ]; then
-            echo "Issue #${existing_issue} already exists; skipping creation."
-            exit 0
+          make update-swagger-ui
+          if git diff --quiet -- embeddedswagger.go static/swagger-ui; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            version=$(sed -n 's/^[[:space:]]*SwaggerVersion = "\([^"]*\)".*/\1/p' embeddedswagger.go)
+            echo "version=$version" >> "$GITHUB_OUTPUT"
           fi
 
-          body=$(cat <<EOF
-          The weekly Swagger UI version check detected that the embedded Swagger UI is older than the latest upstream release.
+      - name: Set up Go
+        if: steps.update.outputs.changed == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
 
-          Details:
-          ${STEPS_SWAGGER_CHECK_OUTPUTS_OUTPUT}
-          EOF
-          )
+      - name: Test update
+        if: steps.update.outputs.changed == 'true'
+        run: go test ./...
 
-          gh issue create \
-            --title "$issue_title" \
-            --body "$body" \
-            --assignee "$ISSUE_ASSIGNEE"
+      - name: Create or update pull request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          token: ${{ secrets.SWAGGER_UI_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: automation/update-swagger-ui
+          commit-message: "Update Swagger UI to ${{ steps.update.outputs.version }}"
+          title: "Update Swagger UI to ${{ steps.update.outputs.version }}"
+          body: |
+            Update the embedded Swagger UI distribution and `SwaggerVersion` to ${{ steps.update.outputs.version }}.
+
+            Upstream releases: https://github.com/swagger-api/swagger-ui/releases
+          add-paths: |
+            embeddedswagger.go
+            static/swagger-ui

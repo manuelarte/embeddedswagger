@@ -34,3 +34,6 @@ go.work.sum
 
 custom-gcl
 
+# Python bytecode
+__pycache__/
+*.pyc

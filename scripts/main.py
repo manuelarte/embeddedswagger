@@ -3,7 +3,6 @@ import os
 import re
 import ssl
 import sys
-from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 
@@ -23,27 +22,34 @@ def get_project_swagger_version(root: str) -> str:
     return version
 
 
-def get_github_latest_version() -> str:
+def get_github_latest_tag() -> str:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "embeddedswagger-check",
+    }
+    token = os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     req = Request(
         "https://api.github.com/repos/swagger-api/swagger-ui/releases/latest",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "embeddedswagger-check",
-        },
+        headers=headers,
     )
 
-    try:
-        with urlopen(req, timeout=20, context=ssl.create_default_context()) as response:
-            payload = json.load(response)
-    except URLError:
-        with urlopen(req, timeout=20, context=ssl._create_unverified_context()) as response:
-            payload = json.load(response)
+    with urlopen(req, timeout=20, context=ssl.create_default_context()) as response:
+        payload = json.load(response)
 
-    version = str(payload.get("tag_name", "")).strip().lstrip("v")
-    if not version:
+    tag = payload.get("tag_name")
+    if not isinstance(tag, str) or not re.fullmatch(
+        r"v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", tag
+    ):
         raise SystemExit("error: GitHub API did not return a valid tag_name for the latest release")
 
-    return version
+    return tag
+
+
+def get_github_latest_version() -> str:
+    return get_github_latest_tag().removeprefix("v")
 
 
 def version_key(version: str):

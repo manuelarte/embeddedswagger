@@ -44,3 +44,20 @@ Check the [examples](examples) folder for a complete example on:
 
 - Standard library `http.DefaultServeMux`.
 - Chi router.
+
+## Updating Swagger UI
+
+The weekly update workflow checks the latest Swagger UI release and opens or
+updates a pull request containing its `dist` directory and the matching
+`SwaggerVersion`. Run `make update-swagger-ui` to perform the same update
+locally. It uses the complete `dist` directory as packaged in the upstream
+source archive.
+
+The repository must allow GitHub Actions to create pull requests. The workflow
+runs the Go tests before opening a pull request; pull requests created with
+`GITHUB_TOKEN` do not automatically trigger the other pull request workflows.
+To trigger them, set the `SWAGGER_UI_UPDATE_TOKEN` repository secret to a
+personal access token with contents and pull request write permissions.
+
+The updater requires verified HTTPS. If Python cannot find a CA bundle on macOS,
+run it with `SSL_CERT_FILE=/etc/ssl/cert.pem make update-swagger-ui`.
